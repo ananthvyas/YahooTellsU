@@ -1,0 +1,261 @@
+package answers;
+
+
+import java.io.InputStream;
+import java.security.SecureRandom;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.math.BigInteger;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
+
+import org.apache.commons.httpclient.Credentials;
+import org.apache.commons.httpclient.HostConfiguration;
+import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.HttpStatus;
+import org.apache.commons.httpclient.UsernamePasswordCredentials;
+import org.apache.commons.httpclient.auth.AuthScope;
+import org.apache.commons.httpclient.methods.GetMethod;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+
+
+/**
+ * Simple Demo to show the power of YQL
+ * @see http://idojava.blogspot.com/
+ * @author Green Ido
+ */
+public class YahooAnswers {
+
+	/**
+	 * Find 'food' places for the JPR
+	 * @param args
+	 * @throws Exception
+	 */
+	public static String query;
+	public static HashMap<String, Double> answerscore;
+	public static void main(String[] args) throws Exception {
+		/*final String authUser = "ananthv";
+    		final String authPassword = "Swisscake1,08";
+
+    		System.setProperty("http.proxyHost", "netmon.iitb.ac.in");
+    		System.setProperty("http.proxyPort", "80");
+    		System.setProperty("http.proxyUser", authUser);
+    		System.setProperty("http.proxyPassword", authPassword);
+
+    		Authenticator.setDefault(
+    				new Authenticator() {
+    					public PasswordAuthentication getPasswordAuthentication() {
+    						return new PasswordAuthentication(authUser, authPassword.toCharArray());
+    					}
+    				}
+    				);*/
+		if(args.length==0){
+			System.out.println("Please provide the query");
+			System.exit(0);
+		}
+		query="";
+		for(int i=0;i<args.length;i++){
+			query+=args[i].toLowerCase()+"%20";
+		}
+		String request = "http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20answers.search(0%2C30)%20where%20query%3D%22"+query+"%22%20and%20type%3D%22resolved%22&diagnostics=true";
+
+		HttpClient client = new HttpClient();
+		HostConfiguration config = client.getHostConfiguration();
+		config.setProxy("netmon.iitb.ac.in", 80);
+
+		String username = "siddhanth";
+		String password = "14101989";
+		Credentials credentials = new UsernamePasswordCredentials(username, password);
+		AuthScope authScope = new AuthScope("netmon.iitb.ac.in", 80);
+
+		client.getState().setProxyCredentials(authScope, credentials);
+		GetMethod method = new GetMethod(request);
+
+		int statusCode = client.executeMethod(method);
+		if (statusCode != HttpStatus.SC_OK) {
+			System.err.println("Method failed: " + method.getStatusLine());
+		} else {
+			InputStream rstream = null;
+			rstream = method.getResponseBodyAsStream();
+			// Process response
+			Document response = DocumentBuilderFactory.newInstance()
+					.newDocumentBuilder().parse(rstream);
+
+			XPathFactory factory = XPathFactory.newInstance();
+			XPath xPath = factory.newXPath();
+			// Get all search Result nodes
+			NodeList nodes = (NodeList) xPath.evaluate("query/results/Question",
+					response, XPathConstants.NODESET);
+			int nodeCount = nodes.getLength();
+			// iterate over search Result nodes
+			String answers="";
+			String questions="";
+			//int length = nl.getLength();
+			HashMap<String,String> questID=new HashMap<String,String>();
+			HashMap<String,String> IDanswer=new HashMap<String,String>();
+			for (int i = 0; i < nodeCount; i++) {
+				// Get each xpath expression as a string
+				String title = (String) xPath.evaluate("Subject", nodes.item(i),
+						XPathConstants.STRING);
+				String summary = (String) xPath.evaluate("ChosenAnswer", nodes
+						.item(i), XPathConstants.STRING);
+				//String chosenid = (String) xPath.evaluate("ChosenAnswerId", nodes
+				//		.item(i), XPathConstants.STRING);
+				//String url = (String) xPath.evaluate("Url", nodes.item(i),
+				//XPathConstants.STRING);
+				// print out the Title, Summary, and URL for each search result
+				//System.out.println("Question: " + title);
+				questions+=title+'~';
+				SecureRandom random = new SecureRandom();
+				String hash=new BigInteger(130, random).toString(32);
+				questID.put(title, hash);  
+				IDanswer.put(hash, summary);
+				//System.out.println("URL: " + url);
+				//answers+=summary+" oNeMoRe ";
+				//System.out.println("-----------");
+
+			}
+			Penalizer penalizer=new Penalizer();
+			HashMap<String, Double> score = penalizer.penalize(questions,query.replaceAll("%20", " ").trim());
+			ValueComparator bvc =  new ValueComparator(score);
+			TreeMap<String,Double> sorted_map = new TreeMap(bvc);
+			sorted_map.putAll(score);
+			int count=0;
+			answerscore=new HashMap<String, Double>();
+			for (String key : sorted_map.keySet()) {
+				if(++count > 10) break;
+				System.out.println(key);
+				answerscore.put(IDanswer.get(questID.get(key)).toLowerCase(), score.get(key));
+				answers+=IDanswer.get(questID.get(key))+" oNeMoRe ";
+			}
+			//System.out.println(answers.replaceAll("[^a-zA-Z0-9]+"," ").replaceAll("\n", " "));
+			yahooContentAnalysis(answers.replaceAll("[^a-zA-Z0-9]+"," ").replaceAll("\n", " ").replaceAll(" ", "%20"));
+		}
+	}
+	public static void yahooContentAnalysis(String query) throws Exception{
+
+		//String request = "http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20local.search%20where%20query%3D%22food%22%20and%20location%3D%22crested%20butte%2C%20co%22&format=xml";
+
+		String request = "http://wikipedia-miner.cms.waikato.ac.nz/services/wikify?source="+query;
+		System.out.println(query.replaceAll("%20", " "));
+		HttpClient client = new HttpClient();
+		HostConfiguration config = client.getHostConfiguration();
+		config.setProxy("netmon.iitb.ac.in", 80);
+
+		String username = "siddhanth";
+		String password = "14101989";
+		Credentials credentials = new UsernamePasswordCredentials(username, password);
+		AuthScope authScope = new AuthScope("netmon.iitb.ac.in", 80);
+
+		client.getState().setProxyCredentials(authScope, credentials);
+
+		GetMethod method = new GetMethod(request);
+
+
+		int statusCode = client.executeMethod(method);
+		if (statusCode != HttpStatus.SC_OK) {
+			System.err.println("Method failed: " + method.getStatusLine());
+		} else {
+			InputStream rstream = null;
+			rstream = method.getResponseBodyAsStream();
+			// Process response
+			Document response = DocumentBuilderFactory.newInstance()
+					.newDocumentBuilder().parse(rstream);
+
+			XPathFactory factory = XPathFactory.newInstance();
+			XPath xPath = factory.newXPath();
+			// Get all search Result nodes
+			NodeList nodes = (NodeList) xPath.evaluate("message",
+					response, XPathConstants.NODESET);
+			int nodeCount = nodes.getLength();
+			// iterate over search Result nodes
+			for (int i = 0; i < nodeCount; i++) {
+				// Get each xpath expression as a string
+				String title = (String) xPath.evaluate("wikifiedDocument", nodes.item(i),
+						XPathConstants.STRING);
+				//String summary = (String) xPath.evaluate("wiki_url", nodes
+				//              .item(i), XPathConstants.STRING);
+				//String url = (String) xPath.evaluate("Url", nodes.item(i),
+				//              XPathConstants.STRING);
+				// print out the Title, Summary, and URL for each search result
+				extractEntities(title,query);
+				//System.out.println("Wiki: " + summary);
+				//System.out.println("URL: " + url);
+				//System.out.println(title);
+
+			}
+		}
+	}
+	public static void extractEntities(String doc,String answer){
+		//String doc1="[[prim minister]] aksjbkajsd [[aksjbjasbd]]";
+		Pattern p = Pattern.compile("\\[\\[(.*?)\\]\\]");
+		Matcher m = p.matcher(doc);
+		HashMap<String,String> ent=new HashMap<String,String>();
+		while (m.find()) {
+			//System.out.println(m.group(1));	
+			String temp=m.group(1);
+			//System.out.println(temp.trim().split("\\|")[0]);
+			String entity="";
+			String text="";
+			if(temp.contains("|")){
+				entity=temp.toString().split("\\|")[0];
+				text=temp.toString().split("\\|")[1];
+			}else{
+				entity=temp;
+				text=temp;
+			}
+			if(!ent.containsKey(entity)){
+				ent.put(entity.toLowerCase(), text.toLowerCase());
+			}else{
+				ent.put(entity.toLowerCase(), ent.get(entity.toLowerCase())+"~"+text.toLowerCase());
+			}
+		}
+		String[] rem=query.split("%20");
+		for(int i=0;i<rem.length;i++){
+			if(ent.containsKey(rem[i].toLowerCase())){
+				ent.remove(rem[i].toLowerCase());
+			}
+		}
+		System.out.println(ent);
+		CountEntities ce=new CountEntities(answerscore,ent);
+		HashMap<String,Double> fin=ce.contains();
+
+		ValueComparator bvc =  new ValueComparator(fin);
+		TreeMap<String,Double> sorted_map = new TreeMap(bvc);
+		sorted_map.putAll(fin);
+
+		System.out.print("Answer : ");
+		System.out.println(sorted_map.firstKey());
+		for (String key : sorted_map.keySet()) {
+			System.out.println(key + "/"+sorted_map.get(key));
+		}
+
+
+	}	
+}
+
+class ValueComparator implements Comparator {
+
+	Map base;
+	public ValueComparator(Map base) {
+		this.base = base;
+	}
+
+	public int compare(Object a, Object b) {
+
+		if((Double)base.get(a) < (Double)base.get(b)) {
+			return 1;
+		} else if((Double)base.get(a) == (Double)base.get(b)) {
+			return 0;
+		} else {
+			return -1;
+		}
+	}
+}
